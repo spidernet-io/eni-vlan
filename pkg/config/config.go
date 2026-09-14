@@ -12,18 +12,32 @@ import (
 )
 
 const (
-	VlanModeManual = "manual"
-	VlanModeAuto   = "auto"
+	// DefaultCheckRetries is the default number of ARP probe attempts.
+	DefaultCheckRetries = 3
+	// DefaultCheckTimeoutMs is the default per-probe timeout in milliseconds.
+	// Real IaaS gateway ARP RTT is measured at ~48ms, 500ms leaves ample margin.
+	DefaultCheckTimeoutMs = 500
 )
 
-// NetConf represents the CNI network configuration
+// NetConf represents the eni-vlan CNI network configuration.
+// VLAN ID and MAC address are always resolved at runtime from
+// spiderpool-agent after IPAM allocation; they cannot be set statically.
 type NetConf struct {
 	types.NetConf
-	Master     string `json:"master"`             // Master interface name (required)
-	VlanMode   string `json:"vlanMode,omitempty"` // VLAN mode: manual or auto
-	VlanID     *int   `json:"vlanId,omitempty"`   // VLAN ID (0-4094). Defaults to 0 in manual mode
+	Master     string `json:"master"` // Master interface name (required)
 	MTU        int    `json:"mtu,omitempty"`
 	LinkContNs bool   `json:"linkInContainer,omitempty"`
+
+	// EnableConnectivityCheck controls the pre-flight connectivity validation:
+	// after the VLAN sub-interface is created (real MAC set, link up, no IP yet),
+	// an ARP probe (sender IP = allocated IP, target = gateway) verifies that the
+	// cloud-assigned IP/VLAN/MAC triple actually works on the IaaS fabric.
+	// Defaults to true.
+	EnableConnectivityCheck *bool `json:"enableConnectivityCheck,omitempty"`
+	// CheckRetries is the number of ARP probe attempts before failing. Defaults to 3.
+	CheckRetries int `json:"checkRetries,omitempty"`
+	// CheckTimeoutMs is the per-probe reply timeout in milliseconds. Defaults to 500.
+	CheckTimeoutMs int `json:"checkTimeoutMs,omitempty"`
 }
 
 // LoadConf loads and validates the CNI configuration
@@ -33,43 +47,47 @@ func LoadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 
+	// Reject removed legacy fields loudly: static VLAN configuration is no
+	// longer supported. Users needing static VLANs should use the community
+	// vlan CNI plugin instead.
+	var raw map[string]interface{}
+	if err := json.Unmarshal(args.StdinData, &raw); err != nil {
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
+	}
+	for _, legacy := range []string{"vlanId", "vlanMode"} {
+		if _, ok := raw[legacy]; ok {
+			return nil, "", fmt.Errorf("field %q is no longer supported: eni-vlan always resolves VLAN/MAC dynamically from spiderpool-agent; for static VLAN configuration use the community vlan CNI plugin", legacy)
+		}
+	}
+
 	if n.Master == "" {
 		return nil, "", fmt.Errorf("\"master\" field is required")
 	}
 
-	switch n.VlanMode {
-	case "":
-		// Backward compatibility: existing configs selected mode by vlanId presence.
-		if n.VlanID == nil {
-			n.VlanMode = VlanModeAuto
-		} else {
-			n.VlanMode = VlanModeManual
-		}
-	case VlanModeManual, VlanModeAuto:
-	default:
-		return nil, "", fmt.Errorf("invalid vlanMode %q (must be %q or %q)", n.VlanMode, VlanModeManual, VlanModeAuto)
+	if n.EnableConnectivityCheck == nil {
+		enabled := true
+		n.EnableConnectivityCheck = &enabled
 	}
-
-	if n.VlanMode == VlanModeManual {
-		if n.VlanID == nil {
-			vlanID := 0
-			n.VlanID = &vlanID
-		}
-		if *n.VlanID < 0 || *n.VlanID > 4094 {
-			return nil, "", fmt.Errorf("invalid vlanId %d (must be 0-4094)", *n.VlanID)
-		}
+	if n.CheckRetries == 0 {
+		n.CheckRetries = DefaultCheckRetries
 	}
-	// Auto mode gets VLAN dynamically from IPAM/spiderpool-agent at runtime.
+	if n.CheckRetries < 0 {
+		return nil, "", fmt.Errorf("invalid checkRetries %d (must be > 0)", n.CheckRetries)
+	}
+	if n.CheckTimeoutMs == 0 {
+		n.CheckTimeoutMs = DefaultCheckTimeoutMs
+	}
+	if n.CheckTimeoutMs < 0 {
+		return nil, "", fmt.Errorf("invalid checkTimeoutMs %d (must be > 0)", n.CheckTimeoutMs)
+	}
 
 	return n, n.CNIVersion, nil
 }
 
-// IsServiceMode returns true if VLAN auto mode is enabled.
-func (n *NetConf) IsServiceMode() bool {
-	if n.VlanMode != "" {
-		return n.VlanMode == VlanModeAuto
-	}
-	return n.VlanID == nil
+// ConnectivityCheckEnabled reports whether the pre-flight connectivity
+// validation is enabled (default true).
+func (n *NetConf) ConnectivityCheckEnabled() bool {
+	return n.EnableConnectivityCheck == nil || *n.EnableConnectivityCheck
 }
 
 // MarshalJSON implements custom JSON marshaling to handle embedded types.NetConf
@@ -90,17 +108,20 @@ func (n *NetConf) MarshalJSON() ([]byte, error) {
 	if n.Master != "" {
 		combined["master"] = n.Master
 	}
-	if n.VlanMode != "" {
-		combined["vlanMode"] = n.VlanMode
-	}
-	if n.VlanID != nil {
-		combined["vlanId"] = *n.VlanID
-	}
 	if n.MTU != 0 {
 		combined["mtu"] = n.MTU
 	}
 	if n.LinkContNs {
 		combined["linkInContainer"] = n.LinkContNs
+	}
+	if n.EnableConnectivityCheck != nil {
+		combined["enableConnectivityCheck"] = *n.EnableConnectivityCheck
+	}
+	if n.CheckRetries != 0 {
+		combined["checkRetries"] = n.CheckRetries
+	}
+	if n.CheckTimeoutMs != 0 {
+		combined["checkTimeoutMs"] = n.CheckTimeoutMs
 	}
 
 	return json.Marshal(combined)
@@ -129,17 +150,6 @@ func (n *NetConf) UnmarshalJSON(data []byte) error {
 			n.Master = s
 		}
 	}
-	if v, ok := raw["vlanMode"]; ok {
-		if s, ok := v.(string); ok {
-			n.VlanMode = s
-		}
-	}
-	if v, ok := raw["vlanId"]; ok {
-		if vlanIDFloat, ok := v.(float64); ok {
-			vlanID := int(vlanIDFloat)
-			n.VlanID = &vlanID
-		}
-	}
 	if v, ok := raw["mtu"]; ok {
 		if mtuFloat, ok := v.(float64); ok {
 			n.MTU = int(mtuFloat)
@@ -148,6 +158,21 @@ func (n *NetConf) UnmarshalJSON(data []byte) error {
 	if v, ok := raw["linkInContainer"]; ok {
 		if b, ok := v.(bool); ok {
 			n.LinkContNs = b
+		}
+	}
+	if v, ok := raw["enableConnectivityCheck"]; ok {
+		if b, ok := v.(bool); ok {
+			n.EnableConnectivityCheck = &b
+		}
+	}
+	if v, ok := raw["checkRetries"]; ok {
+		if f, ok := v.(float64); ok {
+			n.CheckRetries = int(f)
+		}
+	}
+	if v, ok := raw["checkTimeoutMs"]; ok {
+		if f, ok := v.(float64); ok {
+			n.CheckTimeoutMs = int(f)
 		}
 	}
 

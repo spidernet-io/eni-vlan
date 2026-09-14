@@ -1,4 +1,4 @@
-module github.com/spidernet-io/vlan-cni
+module github.com/spidernet-io/eni-vlan
 
 go 1.25
 

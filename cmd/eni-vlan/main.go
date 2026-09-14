@@ -28,8 +28,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
-	"github.com/spidernet-io/vlan-cni/pkg/config"
-	"github.com/spidernet-io/vlan-cni/pkg/vlan"
+	"github.com/spidernet-io/eni-vlan/pkg/config"
+	"github.com/spidernet-io/eni-vlan/pkg/vlan"
 )
 
 func init() {
@@ -47,13 +47,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	var result *current.Result
 
-	// Route to appropriate mode based on configuration
-	if n.IsServiceMode() {
-		result, err = vlan.CmdAddService(args, n)
-	} else {
-		result, err = vlan.CmdAddStandard(args, n)
-	}
-
+	result, err = vlan.CmdAdd(args, n)
 	if err != nil {
 		return err
 	}
@@ -106,5 +100,5 @@ func main() {
 		Check:  cmdCheck,
 		Del:    cmdDel,
 		Status: cmdStatus,
-	}, version.All, bv.BuildString("vlan"))
+	}, version.All, bv.BuildString("eni-vlan"))
 }

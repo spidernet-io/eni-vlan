@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Project settings
-PROJECT_NAME := vlan-cni
-BINARY_NAME := vlan
-CMD_PATH := ./cmd/vlan
+PROJECT_NAME := eni-vlan
+BINARY_NAME := eni-vlan
+CMD_PATH := ./cmd/eni-vlan
 BUILD_DIR := ./bin
 
 # Go settings
