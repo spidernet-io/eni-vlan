@@ -32,8 +32,8 @@ type NetConf struct {
 	// after the VLAN sub-interface is created (real MAC set, link up, no IP yet),
 	// an ARP probe (sender IP = allocated IP, target = gateway) verifies that the
 	// cloud-assigned IP/VLAN/MAC triple actually works on the IaaS fabric.
-	// Defaults to true.
-	ValidateIaasNetConfig *bool `json:"validateIaasNetConfig,omitempty"`
+	// Defaults to false.
+	ValidateIaasNetConfig bool `json:"validateIaasNetConfig,omitempty"`
 	// ValidationRetries is the number of ARP probe attempts before failing. Defaults to 3.
 	ValidationRetries int `json:"validationRetries,omitempty"`
 	// ValidationTimeoutMs is the per-probe reply timeout in milliseconds. Defaults to 500.
@@ -64,10 +64,6 @@ func LoadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("\"master\" field is required")
 	}
 
-	if n.ValidateIaasNetConfig == nil {
-		enabled := true
-		n.ValidateIaasNetConfig = &enabled
-	}
 	if n.ValidationRetries == 0 {
 		n.ValidationRetries = DefaultValidationRetries
 	}
@@ -85,9 +81,9 @@ func LoadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 }
 
 // IaasNetConfigValidationEnabled reports whether the pre-flight connectivity
-// validation is enabled (default true).
+// validation is enabled (default false).
 func (n *NetConf) IaasNetConfigValidationEnabled() bool {
-	return n.ValidateIaasNetConfig == nil || *n.ValidateIaasNetConfig
+	return n.ValidateIaasNetConfig
 }
 
 // MarshalJSON implements custom JSON marshaling to handle embedded types.NetConf
@@ -114,8 +110,8 @@ func (n *NetConf) MarshalJSON() ([]byte, error) {
 	if n.LinkContNs {
 		combined["linkInContainer"] = n.LinkContNs
 	}
-	if n.ValidateIaasNetConfig != nil {
-		combined["validateIaasNetConfig"] = *n.ValidateIaasNetConfig
+	if n.ValidateIaasNetConfig {
+		combined["validateIaasNetConfig"] = n.ValidateIaasNetConfig
 	}
 	if n.ValidationRetries != 0 {
 		combined["validationRetries"] = n.ValidationRetries
@@ -162,7 +158,7 @@ func (n *NetConf) UnmarshalJSON(data []byte) error {
 	}
 	if v, ok := raw["validateIaasNetConfig"]; ok {
 		if b, ok := v.(bool); ok {
-			n.ValidateIaasNetConfig = &b
+			n.ValidateIaasNetConfig = b
 		}
 	}
 	if v, ok := raw["validationRetries"]; ok {

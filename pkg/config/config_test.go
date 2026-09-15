@@ -33,9 +33,8 @@ var _ = Describe("Config Loading", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cniVersion).To(Equal("1.0.0"))
 			Expect(netConf.Master).To(Equal("eth0"))
-			Expect(netConf.IaasNetConfigValidationEnabled()).To(BeTrue())
-			Expect(netConf.ValidateIaasNetConfig).NotTo(BeNil())
-			Expect(*netConf.ValidateIaasNetConfig).To(BeTrue())
+			Expect(netConf.IaasNetConfigValidationEnabled()).To(BeFalse())
+			Expect(netConf.ValidateIaasNetConfig).To(BeFalse())
 			Expect(netConf.ValidationRetries).To(Equal(config.DefaultValidationRetries))
 			Expect(netConf.ValidationTimeoutMs).To(Equal(config.DefaultValidationTimeoutMs))
 		})
@@ -232,12 +231,11 @@ var _ = Describe("Config Loading", func() {
 
 var _ = Describe("NetConf JSON Serialization", func() {
 	It("should marshal and unmarshal correctly", func() {
-		enabled := false
 		original := &config.NetConf{}
 		original.Master = "eth0"
 		original.MTU = 1500
 		original.LinkContNs = true
-		original.ValidateIaasNetConfig = &enabled
+		original.ValidateIaasNetConfig = true
 		original.ValidationRetries = 4
 		original.ValidationTimeoutMs = 800
 
@@ -251,20 +249,19 @@ var _ = Describe("NetConf JSON Serialization", func() {
 		Expect(parsed.Master).To(Equal("eth0"))
 		Expect(parsed.MTU).To(Equal(1500))
 		Expect(parsed.LinkContNs).To(BeTrue())
-		Expect(parsed.ValidateIaasNetConfig).NotTo(BeNil())
-		Expect(*parsed.ValidateIaasNetConfig).To(BeFalse())
+		Expect(parsed.ValidateIaasNetConfig).To(BeTrue())
 		Expect(parsed.ValidationRetries).To(Equal(4))
 		Expect(parsed.ValidationTimeoutMs).To(Equal(800))
 	})
 
-	It("should unmarshal to nil ValidateIaasNetConfig when field absent", func() {
+	It("should default ValidateIaasNetConfig to false when field absent", func() {
 		data := []byte(`{"master": "eth0"}`)
 
 		var parsed config.NetConf
 		err := json.Unmarshal(data, &parsed)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(parsed.ValidateIaasNetConfig).To(BeNil())
-		Expect(parsed.IaasNetConfigValidationEnabled()).To(BeTrue())
+		Expect(parsed.ValidateIaasNetConfig).To(BeFalse())
+		Expect(parsed.IaasNetConfigValidationEnabled()).To(BeFalse())
 	})
 })

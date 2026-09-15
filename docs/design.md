@@ -59,7 +59,7 @@ type NetConf struct {
     MTU        int    `json:"mtu,omitempty"`
     LinkContNs bool   `json:"linkInContainer,omitempty"`
 
-    ValidateIaasNetConfig *bool `json:"validateIaasNetConfig,omitempty"` // default true
+    ValidateIaasNetConfig bool `json:"validateIaasNetConfig,omitempty"` // default false
     ValidationRetries            int   `json:"validationRetries,omitempty"`            // default 3
     ValidationTimeoutMs          int   `json:"validationTimeoutMs,omitempty"`          // default 500
 }

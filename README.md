@@ -60,7 +60,7 @@ IPv4 (ARP) only for now; IPv6 (NS/NA) is a TODO. If the IPAM result contains no 
 | `master` | string | Yes | — | Host network interface (the ENI) to attach the VLAN sub-interface to |
 | `mtu` | int | No | master MTU | MTU for the VLAN sub-interface |
 | `linkInContainer` | bool | No | `false` | Whether the master link is in the container namespace |
-| `validateIaasNetConfig` | bool | No | `true` | Enable the pre-flight connectivity validation |
+| `validateIaasNetConfig` | bool | No | `false` | Enable the pre-flight validation of the cloud-assigned IP/VLAN/MAC triple |
 | `validationRetries` | int | No | `3` | ARP probe attempts before failing |
 | `validationTimeoutMs` | int | No | `500` | Per-probe reply timeout in ms (real IaaS gateway ARP RTT measured at ~48ms) |
 | `ipam` | object | Yes | — | IPAM plugin config (spiderpool) |
