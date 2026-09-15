@@ -21,16 +21,22 @@ eni-vlan does **not** support static VLAN configuration. If you need a plain VLA
 
 ## How It Works
 
-```
-1. Parse K8S_POD_NAME and K8S_POD_NAMESPACE from CNI_ARGS
-2. Invoke IPAM plugin (spiderpool) to allocate IP
-3. Query spiderpool-agent via Unix socket (/var/run/spidernet/spiderpool.sock)
-   with GetWorkloadEndpoint(podName, podNamespace) → VLAN ID, MAC
-4. Create VLAN sub-interface on master, set the real sub-ENI MAC, move it into
-   the Pod netns, link up — no IP configured yet
-5. Connectivity validation (see below); on failure: roll back IPAM allocation,
-   delete the interface, fail the CNI ADD (fail-closed)
-6. Configure IP and routes from the IPAM result, return the CNI result
+```mermaid
+flowchart TD
+    A["CNI ADD"] --> B["Parse K8S_POD_NAME / K8S_POD_NAMESPACE<br/>from CNI_ARGS"]
+    B --> C["IPAM (spiderpool):<br/>allocate IP + gateway"]
+    C --> D["GetWorkloadEndpoint via spiderpool-agent<br/>unix socket /var/run/spidernet/spiderpool.sock<br/>→ VLAN ID + sub-ENI MAC"]
+    D --> E["Create VLAN sub-interface on master,<br/>set real sub-ENI MAC,<br/>move into Pod netns, link up<br/>(no IP configured yet)"]
+    E --> F{"validateIaasNetConfig<br/>enabled?"}
+    F -- no --> I["Configure IP + routes<br/>from IPAM result"]
+    F -- yes --> G["ARP probe in Pod netns:<br/>sender IP = allocated IP<br/>sender MAC = interface real MAC<br/>target = gateway"]
+    G --> H{"Reply from<br/>gateway?"}
+    H -- "yes (config is live)" --> I
+    H -- "timeout × validationRetries" --> R["FAIL CLOSED:<br/>roll back IPAM (DEL)<br/>delete interface<br/>fail CNI ADD"]
+    I --> J["Return CNI result"]
+
+    style R fill:#8b1a1a,color:#fff
+    style J fill:#1a6b2f,color:#fff
 ```
 
 ## Connectivity Validation
