@@ -33,11 +33,11 @@ var _ = Describe("Config Loading", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cniVersion).To(Equal("1.0.0"))
 			Expect(netConf.Master).To(Equal("eth0"))
-			Expect(netConf.ConnectivityCheckEnabled()).To(BeTrue())
-			Expect(netConf.EnableConnectivityCheck).NotTo(BeNil())
-			Expect(*netConf.EnableConnectivityCheck).To(BeTrue())
-			Expect(netConf.CheckRetries).To(Equal(config.DefaultCheckRetries))
-			Expect(netConf.CheckTimeoutMs).To(Equal(config.DefaultCheckTimeoutMs))
+			Expect(netConf.IaasNetConfigValidationEnabled()).To(BeTrue())
+			Expect(netConf.ValidateIaasNetConfig).NotTo(BeNil())
+			Expect(*netConf.ValidateIaasNetConfig).To(BeTrue())
+			Expect(netConf.ValidationRetries).To(Equal(config.DefaultValidationRetries))
+			Expect(netConf.ValidationTimeoutMs).To(Equal(config.DefaultValidationTimeoutMs))
 		})
 
 		It("should honor explicit connectivity check fields", func() {
@@ -46,9 +46,9 @@ var _ = Describe("Config Loading", func() {
 				"name": "eni-network",
 				"type": "eni-vlan",
 				"master": "eth0",
-				"enableConnectivityCheck": false,
-				"checkRetries": 5,
-				"checkTimeoutMs": 1000,
+				"validateIaasNetConfig": false,
+				"validationRetries": 5,
+				"validationTimeoutMs": 1000,
 				"ipam": {
 					"type": "spiderpool"
 				}
@@ -60,18 +60,18 @@ var _ = Describe("Config Loading", func() {
 
 			netConf, _, err := config.LoadConf(args)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(netConf.ConnectivityCheckEnabled()).To(BeFalse())
-			Expect(netConf.CheckRetries).To(Equal(5))
-			Expect(netConf.CheckTimeoutMs).To(Equal(1000))
+			Expect(netConf.IaasNetConfigValidationEnabled()).To(BeFalse())
+			Expect(netConf.ValidationRetries).To(Equal(5))
+			Expect(netConf.ValidationTimeoutMs).To(Equal(1000))
 		})
 
-		It("should keep enableConnectivityCheck true when set explicitly", func() {
+		It("should keep validateIaasNetConfig true when set explicitly", func() {
 			conf := `{
 				"cniVersion": "1.0.0",
 				"name": "eni-network",
 				"type": "eni-vlan",
 				"master": "eth0",
-				"enableConnectivityCheck": true,
+				"validateIaasNetConfig": true,
 				"ipam": {
 					"type": "spiderpool"
 				}
@@ -83,7 +83,7 @@ var _ = Describe("Config Loading", func() {
 
 			netConf, _, err := config.LoadConf(args)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(netConf.ConnectivityCheckEnabled()).To(BeTrue())
+			Expect(netConf.IaasNetConfigValidationEnabled()).To(BeTrue())
 		})
 
 		It("should load MTU and linkInContainer", func() {
@@ -177,13 +177,13 @@ var _ = Describe("Config Loading", func() {
 			Expect(err.Error()).To(ContainSubstring("required"))
 		})
 
-		It("should reject negative checkRetries", func() {
+		It("should reject negative validationRetries", func() {
 			conf := `{
 				"cniVersion": "1.0.0",
 				"name": "eni-network",
 				"type": "eni-vlan",
 				"master": "eth0",
-				"checkRetries": -1,
+				"validationRetries": -1,
 				"ipam": {
 					"type": "spiderpool"
 				}
@@ -195,16 +195,16 @@ var _ = Describe("Config Loading", func() {
 
 			_, _, err := config.LoadConf(args)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("checkRetries"))
+			Expect(err.Error()).To(ContainSubstring("validationRetries"))
 		})
 
-		It("should reject negative checkTimeoutMs", func() {
+		It("should reject negative validationTimeoutMs", func() {
 			conf := `{
 				"cniVersion": "1.0.0",
 				"name": "eni-network",
 				"type": "eni-vlan",
 				"master": "eth0",
-				"checkTimeoutMs": -100,
+				"validationTimeoutMs": -100,
 				"ipam": {
 					"type": "spiderpool"
 				}
@@ -216,7 +216,7 @@ var _ = Describe("Config Loading", func() {
 
 			_, _, err := config.LoadConf(args)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("checkTimeoutMs"))
+			Expect(err.Error()).To(ContainSubstring("validationTimeoutMs"))
 		})
 
 		It("should reject malformed JSON", func() {
@@ -237,9 +237,9 @@ var _ = Describe("NetConf JSON Serialization", func() {
 		original.Master = "eth0"
 		original.MTU = 1500
 		original.LinkContNs = true
-		original.EnableConnectivityCheck = &enabled
-		original.CheckRetries = 4
-		original.CheckTimeoutMs = 800
+		original.ValidateIaasNetConfig = &enabled
+		original.ValidationRetries = 4
+		original.ValidationTimeoutMs = 800
 
 		data, err := json.Marshal(original)
 		Expect(err).NotTo(HaveOccurred())
@@ -251,20 +251,20 @@ var _ = Describe("NetConf JSON Serialization", func() {
 		Expect(parsed.Master).To(Equal("eth0"))
 		Expect(parsed.MTU).To(Equal(1500))
 		Expect(parsed.LinkContNs).To(BeTrue())
-		Expect(parsed.EnableConnectivityCheck).NotTo(BeNil())
-		Expect(*parsed.EnableConnectivityCheck).To(BeFalse())
-		Expect(parsed.CheckRetries).To(Equal(4))
-		Expect(parsed.CheckTimeoutMs).To(Equal(800))
+		Expect(parsed.ValidateIaasNetConfig).NotTo(BeNil())
+		Expect(*parsed.ValidateIaasNetConfig).To(BeFalse())
+		Expect(parsed.ValidationRetries).To(Equal(4))
+		Expect(parsed.ValidationTimeoutMs).To(Equal(800))
 	})
 
-	It("should unmarshal to nil EnableConnectivityCheck when field absent", func() {
+	It("should unmarshal to nil ValidateIaasNetConfig when field absent", func() {
 		data := []byte(`{"master": "eth0"}`)
 
 		var parsed config.NetConf
 		err := json.Unmarshal(data, &parsed)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(parsed.EnableConnectivityCheck).To(BeNil())
-		Expect(parsed.ConnectivityCheckEnabled()).To(BeTrue())
+		Expect(parsed.ValidateIaasNetConfig).To(BeNil())
+		Expect(parsed.IaasNetConfigValidationEnabled()).To(BeTrue())
 	})
 })

@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	// DefaultCheckRetries is the default number of ARP probe attempts.
-	DefaultCheckRetries = 3
-	// DefaultCheckTimeoutMs is the default per-probe timeout in milliseconds.
+	// DefaultValidationRetries is the default number of ARP probe attempts.
+	DefaultValidationRetries = 3
+	// DefaultValidationTimeoutMs is the default per-probe timeout in milliseconds.
 	// Real IaaS gateway ARP RTT is measured at ~48ms, 500ms leaves ample margin.
-	DefaultCheckTimeoutMs = 500
+	DefaultValidationTimeoutMs = 500
 )
 
 // NetConf represents the eni-vlan CNI network configuration.
@@ -28,16 +28,16 @@ type NetConf struct {
 	MTU        int    `json:"mtu,omitempty"`
 	LinkContNs bool   `json:"linkInContainer,omitempty"`
 
-	// EnableConnectivityCheck controls the pre-flight connectivity validation:
+	// ValidateIaasNetConfig controls the pre-flight connectivity validation:
 	// after the VLAN sub-interface is created (real MAC set, link up, no IP yet),
 	// an ARP probe (sender IP = allocated IP, target = gateway) verifies that the
 	// cloud-assigned IP/VLAN/MAC triple actually works on the IaaS fabric.
 	// Defaults to true.
-	EnableConnectivityCheck *bool `json:"enableConnectivityCheck,omitempty"`
-	// CheckRetries is the number of ARP probe attempts before failing. Defaults to 3.
-	CheckRetries int `json:"checkRetries,omitempty"`
-	// CheckTimeoutMs is the per-probe reply timeout in milliseconds. Defaults to 500.
-	CheckTimeoutMs int `json:"checkTimeoutMs,omitempty"`
+	ValidateIaasNetConfig *bool `json:"validateIaasNetConfig,omitempty"`
+	// ValidationRetries is the number of ARP probe attempts before failing. Defaults to 3.
+	ValidationRetries int `json:"validationRetries,omitempty"`
+	// ValidationTimeoutMs is the per-probe reply timeout in milliseconds. Defaults to 500.
+	ValidationTimeoutMs int `json:"validationTimeoutMs,omitempty"`
 }
 
 // LoadConf loads and validates the CNI configuration
@@ -64,30 +64,30 @@ func LoadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("\"master\" field is required")
 	}
 
-	if n.EnableConnectivityCheck == nil {
+	if n.ValidateIaasNetConfig == nil {
 		enabled := true
-		n.EnableConnectivityCheck = &enabled
+		n.ValidateIaasNetConfig = &enabled
 	}
-	if n.CheckRetries == 0 {
-		n.CheckRetries = DefaultCheckRetries
+	if n.ValidationRetries == 0 {
+		n.ValidationRetries = DefaultValidationRetries
 	}
-	if n.CheckRetries < 0 {
-		return nil, "", fmt.Errorf("invalid checkRetries %d (must be > 0)", n.CheckRetries)
+	if n.ValidationRetries < 0 {
+		return nil, "", fmt.Errorf("invalid validationRetries %d (must be > 0)", n.ValidationRetries)
 	}
-	if n.CheckTimeoutMs == 0 {
-		n.CheckTimeoutMs = DefaultCheckTimeoutMs
+	if n.ValidationTimeoutMs == 0 {
+		n.ValidationTimeoutMs = DefaultValidationTimeoutMs
 	}
-	if n.CheckTimeoutMs < 0 {
-		return nil, "", fmt.Errorf("invalid checkTimeoutMs %d (must be > 0)", n.CheckTimeoutMs)
+	if n.ValidationTimeoutMs < 0 {
+		return nil, "", fmt.Errorf("invalid validationTimeoutMs %d (must be > 0)", n.ValidationTimeoutMs)
 	}
 
 	return n, n.CNIVersion, nil
 }
 
-// ConnectivityCheckEnabled reports whether the pre-flight connectivity
+// IaasNetConfigValidationEnabled reports whether the pre-flight connectivity
 // validation is enabled (default true).
-func (n *NetConf) ConnectivityCheckEnabled() bool {
-	return n.EnableConnectivityCheck == nil || *n.EnableConnectivityCheck
+func (n *NetConf) IaasNetConfigValidationEnabled() bool {
+	return n.ValidateIaasNetConfig == nil || *n.ValidateIaasNetConfig
 }
 
 // MarshalJSON implements custom JSON marshaling to handle embedded types.NetConf
@@ -114,14 +114,14 @@ func (n *NetConf) MarshalJSON() ([]byte, error) {
 	if n.LinkContNs {
 		combined["linkInContainer"] = n.LinkContNs
 	}
-	if n.EnableConnectivityCheck != nil {
-		combined["enableConnectivityCheck"] = *n.EnableConnectivityCheck
+	if n.ValidateIaasNetConfig != nil {
+		combined["validateIaasNetConfig"] = *n.ValidateIaasNetConfig
 	}
-	if n.CheckRetries != 0 {
-		combined["checkRetries"] = n.CheckRetries
+	if n.ValidationRetries != 0 {
+		combined["validationRetries"] = n.ValidationRetries
 	}
-	if n.CheckTimeoutMs != 0 {
-		combined["checkTimeoutMs"] = n.CheckTimeoutMs
+	if n.ValidationTimeoutMs != 0 {
+		combined["validationTimeoutMs"] = n.ValidationTimeoutMs
 	}
 
 	return json.Marshal(combined)
@@ -160,19 +160,19 @@ func (n *NetConf) UnmarshalJSON(data []byte) error {
 			n.LinkContNs = b
 		}
 	}
-	if v, ok := raw["enableConnectivityCheck"]; ok {
+	if v, ok := raw["validateIaasNetConfig"]; ok {
 		if b, ok := v.(bool); ok {
-			n.EnableConnectivityCheck = &b
+			n.ValidateIaasNetConfig = &b
 		}
 	}
-	if v, ok := raw["checkRetries"]; ok {
+	if v, ok := raw["validationRetries"]; ok {
 		if f, ok := v.(float64); ok {
-			n.CheckRetries = int(f)
+			n.ValidationRetries = int(f)
 		}
 	}
-	if v, ok := raw["checkTimeoutMs"]; ok {
+	if v, ok := raw["validationTimeoutMs"]; ok {
 		if f, ok := v.(float64); ok {
-			n.CheckTimeoutMs = int(f)
+			n.ValidationTimeoutMs = int(f)
 		}
 	}
 

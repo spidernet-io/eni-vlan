@@ -47,7 +47,7 @@ Why it lives here and only here:
 The probe: an ARP request with sender IP = allocated IP, sender MAC = interface real MAC (kernel-filled, AF_PACKET SOCK_DGRAM), target = gateway IP, executed inside the Pod netns.
 
 - Gateway replies → the whole cloud configuration is live, proceed.
-- No reply after `checkRetries` attempts → wrong VLAN / MAC not effective / IP-MAC binding not pushed. The CNI ADD **fails closed**: IPAM allocation is rolled back and the interface deleted.
+- No reply after `validationRetries` attempts → wrong VLAN / MAC not effective / IP-MAC binding not pushed. The CNI ADD **fails closed**: IPAM allocation is rolled back and the interface deleted.
 
 IPv4 (ARP) only for now; IPv6 (NS/NA) is a TODO. If the IPAM result contains no IPv4 gateway, the check is skipped.
 
@@ -60,9 +60,9 @@ IPv4 (ARP) only for now; IPv6 (NS/NA) is a TODO. If the IPAM result contains no 
 | `master` | string | Yes | — | Host network interface (the ENI) to attach the VLAN sub-interface to |
 | `mtu` | int | No | master MTU | MTU for the VLAN sub-interface |
 | `linkInContainer` | bool | No | `false` | Whether the master link is in the container namespace |
-| `enableConnectivityCheck` | bool | No | `true` | Enable the pre-flight connectivity validation |
-| `checkRetries` | int | No | `3` | ARP probe attempts before failing |
-| `checkTimeoutMs` | int | No | `500` | Per-probe reply timeout in ms (real IaaS gateway ARP RTT measured at ~48ms) |
+| `validateIaasNetConfig` | bool | No | `true` | Enable the pre-flight connectivity validation |
+| `validationRetries` | int | No | `3` | ARP probe attempts before failing |
+| `validationTimeoutMs` | int | No | `500` | Per-probe reply timeout in ms (real IaaS gateway ARP RTT measured at ~48ms) |
 | `ipam` | object | Yes | — | IPAM plugin config (spiderpool) |
 
 The legacy `vlanId` and `vlanMode` fields are rejected with an error. These fields (and the CNI conf as a whole) are intended to be rendered and delivered by SpiderMultusConfig in the future.
@@ -75,9 +75,9 @@ The legacy `vlanId` and `vlanMode` fields are rejected with an error. These fiel
   "name": "eni-network",
   "type": "eni-vlan",
   "master": "eth0",
-  "enableConnectivityCheck": true,
-  "checkRetries": 3,
-  "checkTimeoutMs": 500,
+  "validateIaasNetConfig": true,
+  "validationRetries": 3,
+  "validationTimeoutMs": 500,
   "ipam": {
     "type": "spiderpool"
   }

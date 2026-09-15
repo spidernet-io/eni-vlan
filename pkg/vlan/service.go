@@ -151,7 +151,7 @@ func CmdAdd(args *skel.CmdArgs, n *config.NetConf) (*current.Result, error) {
 	// sub-interface exists with its real MAC and is up, but before any IP is
 	// configured (a configured IP would make the kernel passively answer ARP and
 	// pollute fabric neighbor tables).
-	if n.ConnectivityCheckEnabled() {
+	if n.IaasNetConfigValidationEnabled() {
 		if err := validateConnectivity(args.IfName, netns, result, n); err != nil {
 			rollback()
 			return nil, err
@@ -197,7 +197,7 @@ func validateConnectivity(ifName string, netns ns.NetNS, result *current.Result,
 		return nil
 	}
 
-	timeout := time.Duration(n.CheckTimeoutMs) * time.Millisecond
+	timeout := time.Duration(n.ValidationTimeoutMs) * time.Millisecond
 	return netns.Do(func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(ifName)
 		if err != nil {
@@ -206,7 +206,7 @@ func validateConnectivity(ifName string, netns ns.NetNS, result *current.Result,
 		if err := netlink.LinkSetUp(link); err != nil {
 			return fmt.Errorf("failed to set %q up for connectivity validation: %w", ifName, err)
 		}
-		return networking.CheckGatewayReachable(ifName, srcIP, gwIP, n.CheckRetries, timeout)
+		return networking.CheckGatewayReachable(ifName, srcIP, gwIP, n.ValidationRetries, timeout)
 	})
 }
 

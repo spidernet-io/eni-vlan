@@ -59,9 +59,9 @@ type NetConf struct {
     MTU        int    `json:"mtu,omitempty"`
     LinkContNs bool   `json:"linkInContainer,omitempty"`
 
-    EnableConnectivityCheck *bool `json:"enableConnectivityCheck,omitempty"` // default true
-    CheckRetries            int   `json:"checkRetries,omitempty"`            // default 3
-    CheckTimeoutMs          int   `json:"checkTimeoutMs,omitempty"`          // default 500
+    ValidateIaasNetConfig *bool `json:"validateIaasNetConfig,omitempty"` // default true
+    ValidationRetries            int   `json:"validationRetries,omitempty"`            // default 3
+    ValidationTimeoutMs          int   `json:"validationTimeoutMs,omitempty"`          // default 500
 }
 ```
 
@@ -69,7 +69,7 @@ Validation rules:
 
 - `master` is required.
 - `vlanId` and `vlanMode` are rejected with a descriptive error (removed legacy fields; static VLAN users are pointed to the community vlan CNI).
-- `checkRetries` / `checkTimeoutMs` must be positive; zero means "use default".
+- `validationRetries` / `validationTimeoutMs` must be positive; zero means "use default".
 - These fields are intended to be rendered and delivered by SpiderMultusConfig in the future, hence all connectivity-check fields have safe defaults.
 
 ### Example
@@ -80,9 +80,9 @@ Validation rules:
   "name": "eni-network",
   "type": "eni-vlan",
   "master": "eth0",
-  "enableConnectivityCheck": true,
-  "checkRetries": 3,
-  "checkTimeoutMs": 500,
+  "validateIaasNetConfig": true,
+  "validationRetries": 3,
+  "validationTimeoutMs": 500,
   "ipam": {
     "type": "spiderpool"
   }
@@ -162,7 +162,7 @@ Implemented in `pkg/networking/arp.go`, modeled after spiderpool `pkg/networking
 - `AF_PACKET` / `SOCK_DGRAM` socket bound to the VLAN sub-interface: the kernel builds the Ethernet header, so the source MAC is automatically the interface's real MAC.
 - ARP request payload: sender IP = allocated IP, sender MAC = interface MAC, target = gateway IP, target MAC = broadcast.
 - Receive loop with `SO_RCVTIMEO`; a packet matching `Operation == reply && SenderIP == gateway` proves the configuration is live.
-- `checkRetries` attempts × `checkTimeoutMs` per attempt; executed inside the Pod netns via `ns.Do`.
+- `validationRetries` attempts × `validationTimeoutMs` per attempt; executed inside the Pod netns via `ns.Do`.
 - On timeout the CNI ADD **fails closed**: `ipam.ExecDel` + interface deletion, so the scheduler can retry with a fresh allocation.
 - IPv4 ARP only; IPv6 NS/NA probing is a TODO. When the IPAM result has no IPv4 gateway, the check is skipped.
 
@@ -196,5 +196,5 @@ pkg/vlan/service.go         # CNI ADD flow orchestration
 
 ## Test Scenarios
 
-- Config parsing: defaults for `enableConnectivityCheck`/`checkRetries`/`checkTimeoutMs`, explicit overrides, rejection of `vlanId`/`vlanMode`, missing `master`, invalid values, JSON round-trip.
+- Config parsing: defaults for `validateIaasNetConfig`/`validationRetries`/`validationTimeoutMs`, explicit overrides, rejection of `vlanId`/`vlanMode`, missing `master`, invalid values, JSON round-trip.
 - ARP logic (pure functions, no sockets): request building, payload parsing, gateway-reply matching, negative cases (truncated/non-ARP packets, replies from other hosts, requests instead of replies).
