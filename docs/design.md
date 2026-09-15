@@ -157,9 +157,9 @@ Conclusions from real IaaS fabric testing (VLAN 3321, gateway 12.175.227.254):
 
 ### Probe mechanics
 
-Implemented in `pkg/networking/arp.go`, modeled after spiderpool `pkg/networking/networking/packet.go` (`SendARPReuqest`) and the `Detector` receive loop in `ipam_detection.go`:
+Implemented in `pkg/networking/arp.go`, reusing spiderpool's networking code instead of maintaining a second packet implementation — sending via spiderpool `pkg/networking/networking` `SendARPReuqest`, receiving via `github.com/mdlayher/arp` (the same library used by spiderpool's `Detector` in `ipam_detection.go`):
 
-- `AF_PACKET` / `SOCK_DGRAM` socket bound to the VLAN sub-interface: the kernel builds the Ethernet header, so the source MAC is automatically the interface's real MAC.
+- `SendARPReuqest` uses an `AF_PACKET` / `SOCK_DGRAM` socket: the kernel builds the Ethernet header, so the source MAC is automatically the interface's real MAC.
 - ARP request payload: sender IP = allocated IP, sender MAC = interface MAC, target = gateway IP, target MAC = broadcast.
 - Receive loop with `SO_RCVTIMEO`; a packet matching `Operation == reply && SenderIP == gateway` proves the configuration is live.
 - `validationRetries` attempts × `validationTimeoutMs` per attempt; executed inside the Pod netns via `ns.Do`.
@@ -189,7 +189,7 @@ The probe MUST run while the interface has **no IP address configured**. A confi
 ```
 cmd/eni-vlan/main.go        # skel entry: cmdAdd / cmdDel / cmdCheck / cmdStatus
 pkg/config/config.go        # NetConf, LoadConf, legacy-field rejection, defaults
-pkg/networking/arp.go       # ARP build/parse/probe (connectivity validation)
+pkg/networking/arp.go       # ARP probe (reuses spiderpool SendARPReuqest + mdlayher/arp)
 pkg/vlan/interface.go       # CreateVlan / DeleteVlan / UpdateMac / GetMTU
 pkg/vlan/service.go         # CNI ADD flow orchestration
 ```
@@ -197,4 +197,4 @@ pkg/vlan/service.go         # CNI ADD flow orchestration
 ## Test Scenarios
 
 - Config parsing: defaults for `validateIaasNetConfig`/`validationRetries`/`validationTimeoutMs`, explicit overrides, rejection of `vlanId`/`vlanMode`, missing `master`, invalid values, JSON round-trip.
-- ARP logic (pure functions, no sockets): request building, payload parsing, gateway-reply matching, negative cases (truncated/non-ARP packets, replies from other hosts, requests instead of replies).
+- ARP logic: gateway-reply matching (replies from other hosts, requests instead of replies, nil packets).
